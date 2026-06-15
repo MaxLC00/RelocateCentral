@@ -5,8 +5,8 @@
   "description": "Repair progress tracking portal for the Allerton apartment building (residents, stakeholders, relocation teams).",
   "scripts": {
     "install:all": "npm install && npm --prefix server install && npm --prefix client install",
-    "build": "npm --prefix client install && npm --prefix client run build",
-    "start": "npm --prefix server start",
+    "build": "npm --prefix server install && npm --prefix client install && npm --prefix client run build",
+    "start": "node server/server.js",
     "server": "npm --prefix server run dev",
     "client": "npm --prefix client run dev",
     "seed": "npm --prefix server run seed",
