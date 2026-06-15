@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Salus Development — Property Portal</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: #0f1729;
+        color: #e2e8f0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        padding: 1.5rem 2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+      }
+
+      .logo-mark {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: #2563eb;
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+        font-size: 1.1rem;
+        color: #fff;
+        flex-shrink: 0;
+      }
+
+      .logo-text {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .logo-sub {
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 1.5rem;
+        text-align: center;
+      }
+
+      h1 {
+        font-size: clamp(1.9rem, 5vw, 3rem);
+        font-weight: 800;
+        color: #fff;
+        margin: 0 0 1rem;
+        line-height: 1.15;
+      }
+
+      .subtitle {
+        color: #94a3b8;
+        font-size: 1.1rem;
+        max-width: 520px;
+        margin: 0 auto 3rem;
+        line-height: 1.6;
+      }
+
+      .properties {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1.25rem;
+        justify-content: center;
+        max-width: 900px;
+      }
+
+      .property-card {
+        background: #1e293b;
+        border: 1px solid rgba(255,255,255,0.08);
+        border-top: 4px solid #2563eb;
+        border-radius: 14px;
+        padding: 2rem 2.25rem;
+        text-decoration: none;
+        color: inherit;
+        width: 280px;
+        transition: transform 0.12s, box-shadow 0.12s, border-top-color 0.12s;
+        text-align: left;
+      }
+
+      .property-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+        border-top-color: #3b82f6;
+        text-decoration: none;
+      }
+
+      .property-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 11px;
+        background: rgba(37,99,235,0.2);
+        display: grid;
+        place-items: center;
+        font-size: 1.4rem;
+        margin-bottom: 1rem;
+      }
+
+      .property-name {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #f1f5f9;
+        margin: 0 0 0.4rem;
+      }
+
+      .property-desc {
+        font-size: 0.88rem;
+        color: #64748b;
+        margin: 0 0 1.25rem;
+        line-height: 1.5;
+      }
+
+      .go-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #60a5fa;
+      }
+
+      footer {
+        text-align: center;
+        padding: 1.5rem;
+        font-size: 0.82rem;
+        color: #334155;
+        border-top: 1px solid rgba(255,255,255,0.05);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="logo-mark">S</div>
+      <div>
+        <div class="logo-text">Salus Development</div>
+        <div class="logo-sub">Property Management Portal</div>
+      </div>
+    </header>
+
+    <main>
+      <h1>Select a property</h1>
+      <p class="subtitle">
+        Choose a property below to view repair progress, announcements,
+        and resident information.
+      </p>
+
+      <div class="properties">
+        <a href="/allerton" class="property-card">
+          <div class="property-icon">🏢</div>
+          <div class="property-name">Allerton</div>
+          <p class="property-desc">
+            Repair progress portal for the Allerton apartment building —
+            residents, relocation &amp; property team.
+          </p>
+          <span class="go-btn">Open portal →</span>
+        </a>
+      </div>
+    </main>
+
+    <footer>&copy; 2026 Salus Development</footer>
+  </body>
+</html>
