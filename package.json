@@ -2,7 +2,7 @@
   "name": "allerton-info",
   "version": "0.1.0",
   "private": true,
-  "description": "Repair progress tracking portal for the Allerton apartment building (residents, stakeholders, relocation teams).",
+  "description": "Repair progress tracking portal for the Allerton apartment building",
   "scripts": {
     "install:all": "npm install && npm --prefix server install && npm --prefix client install",
     "build": "npm --prefix server install && npm --prefix client install --include=dev && npm --prefix client run build"
