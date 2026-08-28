@@ -1,0 +1,5 @@
+[
+  { "username": "jsmith", "password": "ChangeMe123!", "role": "Admin", "displayName": "Jane Smith" },
+  { "username": "mgarcia", "password": "ChangeMe123!", "role": "Member", "displayName": "Miguel Garcia" },
+  { "username": "acme-contractor", "password": "ChangeMe123!", "role": "3rd Party", "displayName": "Acme Contracting" }
+]

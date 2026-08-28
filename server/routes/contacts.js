@@ -6,9 +6,15 @@ const {
   updateContactStatus,
 } = require("../controllers/contactController");
 const requireAuth = require("../middleware/auth");
+const { requireRole } = require("../middleware/auth");
 
 router.post("/", createContact);
-router.get("/", requireAuth, listContacts);
-router.patch("/:id/status", requireAuth, updateContactStatus);
+router.get("/", requireAuth, requireRole("Admin", "Member"), listContacts);
+router.patch(
+  "/:id/status",
+  requireAuth,
+  requireRole("Admin", "Member"),
+  updateContactStatus
+);
 
 module.exports = router;

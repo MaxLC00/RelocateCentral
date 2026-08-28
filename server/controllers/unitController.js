@@ -39,6 +39,84 @@ async function listUnits(req, res, next) {
   }
 }
 
+// Wrap a value for safe CSV output (RFC 4180 style).
+function csvCell(value) {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (/[",\r\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function formatDateCell(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+
+// GET /api/units/export  -> CSV download for signed-in team members
+async function exportUnits(req, res, next) {
+  try {
+    const units = await Unit.find()
+      .sort({ group: 1, unitNumber: 1 })
+      .lean();
+
+    const columns = [
+      "Unit Number",
+      "Floor",
+      "Group",
+      "Resident Name",
+      "Status",
+      "Move-Out Date",
+      "Expected Move-In Date",
+      "Storage Location",
+      "Temporary Housing Location",
+      "Notes",
+      "Latest Update",
+      "Latest Update Date",
+      "Last Modified",
+    ];
+
+    const rows = units.map((u) => {
+      const latest =
+        Array.isArray(u.updates) && u.updates.length
+          ? [...u.updates].sort((a, b) => new Date(b.date) - new Date(a.date))[0]
+          : null;
+      return [
+        u.unitNumber,
+        u.floor,
+        u.group,
+        u.residentName,
+        u.status,
+        formatDateCell(u.moveOutDate),
+        formatDateCell(u.moveInDate),
+        u.storageLocation,
+        u.temporaryHousingLocation,
+        u.notes,
+        latest ? latest.note : "",
+        latest ? formatDateCell(latest.date) : "",
+        formatDateCell(u.updatedAt),
+      ];
+    });
+
+    const csv = [columns, ...rows]
+      .map((row) => row.map(csvCell).join(","))
+      .join("\r\n");
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="unit-status-${stamp}.csv"`
+    );
+    // BOM so Excel opens UTF-8 correctly.
+    res.send("\uFEFF" + csv);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // PUT /api/units/:unitNumber  -> team only
 async function updateUnit(req, res, next) {
   try {
@@ -76,4 +154,5 @@ module.exports = {
   getUnitStatus,
   listUnits,
   updateUnit,
+  exportUnits,
 };

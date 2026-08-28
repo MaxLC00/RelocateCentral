@@ -7,8 +7,12 @@ import {
   deleteAnnouncement,
   listUnits,
   updateUnit,
+  downloadUnitsCsv,
   listContacts,
   updateContactStatus,
+  listUsers,
+  createUser,
+  deleteUser,
 } from "../api.js";
 import { formatDate, statusClass } from "../utils.js";
 
@@ -18,6 +22,7 @@ const EMPTY_ANNOUNCEMENT = { title: "", body: "", category: "general", pinned: f
 
 // ─── Announcements panel ──────────────────────────────────────────────────────
 function AnnouncementsPanel() {
+  const { canEdit, isAdmin } = useAuth();
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(EMPTY_ANNOUNCEMENT);
   const [status, setStatus] = useState({ state: "idle", message: "" });
@@ -63,50 +68,58 @@ function AnnouncementsPanel() {
 
   return (
     <div>
-      <h2 className="section-title">Post Announcement</h2>
-      <p className="section-sub">New announcements appear on the resident portal immediately.</p>
+      {canEdit && (
+        <>
+          <h2 className="section-title">Post Announcement</h2>
+          <p className="section-sub">New announcements appear on the resident portal immediately.</p>
 
-      <form className="form-card" style={{ marginBottom: "2.5rem" }} onSubmit={handlePost}>
-        {status.state === "success" && <div className="alert alert-success">{status.message}</div>}
-        {status.state === "error" && <div className="alert alert-error">{status.message}</div>}
+          <form className="form-card" style={{ marginBottom: "2.5rem" }} onSubmit={handlePost}>
+            {status.state === "success" && <div className="alert alert-success">{status.message}</div>}
+            {status.state === "error" && <div className="alert alert-error">{status.message}</div>}
 
-        <div className="field">
-          <label htmlFor="ann-title">Title *</label>
-          <input id="ann-title" type="text" required value={form.title} onChange={update("title")} />
-        </div>
+            <div className="field">
+              <label htmlFor="ann-title">Title *</label>
+              <input id="ann-title" type="text" required value={form.title} onChange={update("title")} />
+            </div>
 
-        <div className="field">
-          <label htmlFor="ann-body">Body *</label>
-          <textarea id="ann-body" required value={form.body} onChange={update("body")} />
-        </div>
+            <div className="field">
+              <label htmlFor="ann-body">Body *</label>
+              <textarea id="ann-body" required value={form.body} onChange={update("body")} />
+            </div>
 
-        <div className="form-row">
-          <div className="field">
-            <label htmlFor="ann-category">Category</label>
-            <select id="ann-category" value={form.category} onChange={update("category")}>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="ann-author">Author</label>
-            <input id="ann-author" type="text" value={form.author} onChange={update("author")} />
-          </div>
-        </div>
+            <div className="form-row">
+              <div className="field">
+                <label htmlFor="ann-category">Category</label>
+                <select id="ann-category" value={form.category} onChange={update("category")}>
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="ann-author">Author</label>
+                <input id="ann-author" type="text" value={form.author} onChange={update("author")} />
+              </div>
+            </div>
 
-        <div className="field" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <input id="ann-pinned" type="checkbox" checked={form.pinned} onChange={update("pinned")} style={{ width: "auto" }} />
-          <label htmlFor="ann-pinned" style={{ margin: 0 }}>Pin to top</label>
-        </div>
+            <div className="field" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <input id="ann-pinned" type="checkbox" checked={form.pinned} onChange={update("pinned")} style={{ width: "auto" }} />
+              <label htmlFor="ann-pinned" style={{ margin: 0 }}>Pin to top</label>
+            </div>
 
-        <button type="submit" className="btn btn-primary" disabled={status.state === "submitting"}>
-          {status.state === "submitting" ? "Posting…" : "Post announcement"}
-        </button>
-      </form>
+            <button type="submit" className="btn btn-primary" disabled={status.state === "submitting"}>
+              {status.state === "submitting" ? "Posting…" : "Post announcement"}
+            </button>
+          </form>
+        </>
+      )}
 
       <h2 className="section-title">Existing Announcements</h2>
-      <p className="section-sub">Click delete to remove an announcement from the resident portal.</p>
+      <p className="section-sub">
+        {isAdmin
+          ? "Click delete to remove an announcement from the resident portal."
+          : "Announcements currently shown on the resident portal."}
+      </p>
 
       {loading && <div className="loading-state">Loading…</div>}
       {!loading && items.length === 0 && <div className="empty-state">No announcements yet.</div>}
@@ -120,13 +133,15 @@ function AnnouncementsPanel() {
             <p className="announcement-body" style={{ margin: "0.35rem 0 0" }}>{a.body}</p>
             <div className="announcement-meta">{a.author} · {formatDate(a.createdAt)}</div>
           </div>
-          <button
-            className="btn btn-outline"
-            style={{ color: "var(--danger)", borderColor: "var(--danger)", flexShrink: 0 }}
-            onClick={() => handleDelete(a._id)}
-          >
-            Delete
-          </button>
+          {isAdmin && (
+            <button
+              className="btn btn-outline"
+              style={{ color: "var(--danger)", borderColor: "var(--danger)", flexShrink: 0 }}
+              onClick={() => handleDelete(a._id)}
+            >
+              Delete
+            </button>
+          )}
         </div>
       ))}
     </div>
@@ -135,6 +150,7 @@ function AnnouncementsPanel() {
 
 // ─── Units panel ──────────────────────────────────────────────────────────────
 function UnitsPanel() {
+  const { canEditUnits } = useAuth();
   const [units, setUnits] = useState([]);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("group");
@@ -142,6 +158,7 @@ function UnitsPanel() {
   const [form, setForm] = useState({});
   const [saveStatus, setSaveStatus] = useState({ state: "idle", message: "" });
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     listUnits()
@@ -200,7 +217,28 @@ function UnitsPanel() {
     }
   }
 
+  async function handleDownload() {
+    setDownloading(true);
+    try {
+      await downloadUnitsCsv();
+    } catch {
+      /* silent */
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
+    <>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1.25rem" }}>
+      <div>
+        <h2 className="section-title" style={{ marginBottom: "0.25rem" }}>Units</h2>
+        <p className="section-sub" style={{ margin: 0 }}>Select a unit to view its details, or download the full list.</p>
+      </div>
+      <button className="btn btn-outline" onClick={handleDownload} disabled={downloading}>
+        {downloading ? "Preparing…" : "⬇ Download spreadsheet (CSV)"}
+      </button>
+    </div>
     <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "1.5rem", alignItems: "start" }}>
       {/* Unit list */}
       <div>
@@ -272,60 +310,72 @@ function UnitsPanel() {
           <form className="form-card" onSubmit={handleSave}>
             <h3 style={{ marginTop: 0 }}>Unit {selected.unitNumber} <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>— Group {selected.group}</span></h3>
 
+            {!canEditUnits && (
+              <div className="alert" style={{ background: "var(--primary-soft)", marginBottom: "1rem" }}>
+                You have read-only access to unit details.
+              </div>
+            )}
             {saveStatus.state === "success" && <div className="alert alert-success">{saveStatus.message}</div>}
             {saveStatus.state === "error" && <div className="alert alert-error">{saveStatus.message}</div>}
 
-            <div className="field">
-              <label>Resident name</label>
-              <input type="text" value={form.residentName} onChange={update("residentName")} placeholder="Full name" />
-            </div>
-
-            <div className="field">
-              <label>Status</label>
-              <select value={form.status} onChange={update("status")}>
-                {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-
-            <div className="form-row">
+            <fieldset disabled={!canEditUnits} style={{ border: "none", padding: 0, margin: 0 }}>
               <div className="field">
-                <label>Move-out date</label>
-                <input type="date" value={form.moveOutDate} onChange={update("moveOutDate")} />
+                <label>Resident name</label>
+                <input type="text" value={form.residentName} onChange={update("residentName")} placeholder="Full name" />
               </div>
+
               <div className="field">
-                <label>Expected move-in date</label>
-                <input type="date" value={form.moveInDate} onChange={update("moveInDate")} />
+                <label>Status</label>
+                <select value={form.status} onChange={update("status")}>
+                  {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
-            </div>
 
-            <div className="field">
-              <label>Storage location</label>
-              <input type="text" value={form.storageLocation} onChange={update("storageLocation")} placeholder="e.g. Floor 2 storage room" />
-            </div>
+              <div className="form-row">
+                <div className="field">
+                  <label>Move-out date</label>
+                  <input type="date" value={form.moveOutDate} onChange={update("moveOutDate")} />
+                </div>
+                <div className="field">
+                  <label>Expected move-in date</label>
+                  <input type="date" value={form.moveInDate} onChange={update("moveInDate")} />
+                </div>
+              </div>
 
-            <div className="field">
-              <label>Temporary housing location</label>
-              <input type="text" value={form.temporaryHousingLocation} onChange={update("temporaryHousingLocation")} placeholder="e.g. Hotel, address" />
-            </div>
+              <div className="field">
+                <label>Storage location</label>
+                <input type="text" value={form.storageLocation} onChange={update("storageLocation")} placeholder="e.g. Floor 2 storage room" />
+              </div>
 
-            <div className="field">
-              <label>Notes</label>
-              <textarea value={form.notes} onChange={update("notes")} placeholder="Internal notes about this unit" />
-            </div>
+              <div className="field">
+                <label>Temporary housing location</label>
+                <input type="text" value={form.temporaryHousingLocation} onChange={update("temporaryHousingLocation")} placeholder="e.g. Hotel, address" />
+              </div>
 
-            <div className="field">
-              <label>Add update (optional)</label>
-              <input type="text" value={form.updateNote} onChange={update("updateNote")} placeholder="Short note for the timeline, e.g. 'Drywall repairs started'" />
-              <span className="hint">This will be added to the unit's update timeline.</span>
-            </div>
+              <div className="field">
+                <label>Notes</label>
+                <textarea value={form.notes} onChange={update("notes")} placeholder="Internal notes about this unit" />
+              </div>
 
-            <button type="submit" className="btn btn-primary" disabled={saveStatus.state === "saving"}>
-              {saveStatus.state === "saving" ? "Saving…" : "Save changes"}
-            </button>
+              {canEditUnits && (
+                <div className="field">
+                  <label>Add update (optional)</label>
+                  <input type="text" value={form.updateNote} onChange={update("updateNote")} placeholder="Short note for the timeline, e.g. 'Drywall repairs started'" />
+                  <span className="hint">This will be added to the unit's update timeline.</span>
+                </div>
+              )}
+            </fieldset>
+
+            {canEditUnits && (
+              <button type="submit" className="btn btn-primary" disabled={saveStatus.state === "saving"}>
+                {saveStatus.state === "saving" ? "Saving…" : "Save changes"}
+              </button>
+            )}
           </form>
         )}
       </div>
     </div>
+    </>
   );
 }
 
@@ -433,17 +483,135 @@ function MessagesPanel() {
   );
 }
 
+// ─── Users panel (Admin only) ─────────────────────────────────────────────────
+const ROLES = ["Admin", "Member", "3rd Party"];
+const EMPTY_USER = { username: "", password: "", role: "Member", displayName: "" };
+const ROLE_BADGE = {
+  Admin: { background: "#dbeafe", color: "#1e40af" },
+  Member: { background: "#dcfce7", color: "#166534" },
+  "3rd Party": { background: "#fef3c7", color: "#b45309" },
+};
+
+function UsersPanel() {
+  const { username: currentUsername } = useAuth();
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState(EMPTY_USER);
+  const [status, setStatus] = useState({ state: "idle", message: "" });
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try { setUsers(await listUsers()); }
+    catch { /* silent */ }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function update(field) {
+    return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault();
+    setStatus({ state: "submitting", message: "" });
+    try {
+      await createUser(form);
+      setStatus({ state: "success", message: `User "${form.username}" added.` });
+      setForm(EMPTY_USER);
+      load();
+    } catch (err) {
+      setStatus({ state: "error", message: err.response?.data?.message || "Failed to add user." });
+    }
+  }
+
+  async function handleDelete(id, name) {
+    if (!window.confirm(`Remove user "${name}"? They will no longer be able to sign in.`)) return;
+    try {
+      await deleteUser(id);
+      load();
+    } catch { /* silent */ }
+  }
+
+  return (
+    <div>
+      <h2 className="section-title">Add User</h2>
+      <p className="section-sub">Create a login for a team member or third party.</p>
+
+      <form className="form-card" style={{ marginBottom: "2.5rem" }} onSubmit={handleCreate}>
+        {status.state === "success" && <div className="alert alert-success">{status.message}</div>}
+        {status.state === "error" && <div className="alert alert-error">{status.message}</div>}
+
+        <div className="form-row">
+          <div className="field">
+            <label htmlFor="user-username">Username *</label>
+            <input id="user-username" type="text" required value={form.username} onChange={update("username")} autoComplete="off" />
+          </div>
+          <div className="field">
+            <label htmlFor="user-displayname">Display name</label>
+            <input id="user-displayname" type="text" value={form.displayName} onChange={update("displayName")} placeholder="Full name (optional)" />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="field">
+            <label htmlFor="user-password">Password *</label>
+            <input id="user-password" type="text" required value={form.password} onChange={update("password")} autoComplete="off" />
+          </div>
+          <div className="field">
+            <label htmlFor="user-role">Role *</label>
+            <select id="user-role" value={form.role} onChange={update("role")}>
+              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <button type="submit" className="btn btn-primary" disabled={status.state === "submitting"}>
+          {status.state === "submitting" ? "Adding…" : "Add user"}
+        </button>
+      </form>
+
+      <h2 className="section-title">Existing Users</h2>
+      <p className="section-sub">All accounts that can sign in to the dashboard.</p>
+
+      {loading && <div className="loading-state">Loading…</div>}
+      {!loading && users.length === 0 && <div className="empty-state">No users yet.</div>}
+      {!loading && users.map((u) => (
+        <div key={u._id} className="card" style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <strong>{u.username}</strong>
+            {u.displayName && <span style={{ color: "var(--text-muted)" }}>{u.displayName}</span>}
+            <span className="badge" style={ROLE_BADGE[u.role] || {}}>{u.role}</span>
+          </div>
+          {u.username !== currentUsername && (
+            <button
+              className="btn btn-outline"
+              style={{ color: "var(--danger)", borderColor: "var(--danger)", flexShrink: 0 }}
+              onClick={() => handleDelete(u._id, u.username)}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Dashboard shell ──────────────────────────────────────────────────────────
-const TABS = [
-  { key: "announcements", label: "📢 Announcements" },
-  { key: "units", label: "🏠 Units" },
-  { key: "messages", label: "✉️ Messages" },
+const ALL_TABS = [
+  { key: "announcements", label: "📢 Announcements", roles: ["Admin", "Member", "3rd Party"] },
+  { key: "units", label: "🏠 Units", roles: ["Admin", "Member", "3rd Party"] },
+  { key: "messages", label: "✉️ Messages", roles: ["Admin", "Member"] },
+  { key: "users", label: "👤 Users", roles: ["Admin"] },
 ];
 
 export default function TeamDashboard() {
-  const { username, logout } = useAuth();
+  const { username, role, logout } = useAuth();
   const navigate = useNavigate();
-  const [tab, setTab] = useState("announcements");
+
+  const tabs = ALL_TABS.filter((t) => t.roles.includes(role));
+  const [tab, setTab] = useState(tabs[0]?.key || "announcements");
 
   function handleLogout() {
     logout();
@@ -455,14 +623,19 @@ export default function TeamDashboard() {
       <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h1>Team Dashboard</h1>
-          <p>Signed in as <strong>{username}</strong></p>
+          <p>
+            Signed in as <strong>{username}</strong>
+            {role && (
+              <span className="badge" style={{ marginLeft: "0.5rem", ...(ROLE_BADGE[role] || {}) }}>{role}</span>
+            )}
+          </p>
         </div>
         <button className="btn btn-outline" onClick={handleLogout}>Sign out</button>
       </div>
 
       {/* Tab bar */}
       <div className="filter-bar" style={{ marginBottom: "2rem" }}>
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             className={`pill ${tab === t.key ? "active" : ""}`}
@@ -476,6 +649,7 @@ export default function TeamDashboard() {
       {tab === "announcements" && <AnnouncementsPanel />}
       {tab === "units" && <UnitsPanel />}
       {tab === "messages" && <MessagesPanel />}
+      {tab === "users" && <UsersPanel />}
     </div>
   );
 }

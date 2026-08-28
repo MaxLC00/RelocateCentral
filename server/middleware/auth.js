@@ -16,4 +16,21 @@ function requireAuth(req, res, next) {
   }
 }
 
+// Restrict a route to one or more roles. Assumes requireAuth ran first.
+function requireRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Authentication required." });
+    }
+    if (!allowedRoles.includes(req.user.role)) {
+      return res
+        .status(403)
+        .json({ message: "You do not have permission to perform this action." });
+    }
+    next();
+  };
+}
+
 module.exports = requireAuth;
+module.exports.requireAuth = requireAuth;
+module.exports.requireRole = requireRole;

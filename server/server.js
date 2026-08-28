@@ -4,6 +4,7 @@ const cors = require("cors");
 const connectDB = require("./config/db");
 
 const authRoutes = require("./routes/auth");
+const userRoutes = require("./routes/users");
 const announcementRoutes = require("./routes/announcements");
 const unitRoutes = require("./routes/units");
 const contactRoutes = require("./routes/contacts");
@@ -43,6 +44,7 @@ app.get("/api/health", (req, res) => {
 
 // Feature routes
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/units", unitRoutes);
 app.use("/api/contacts", contactRoutes);
