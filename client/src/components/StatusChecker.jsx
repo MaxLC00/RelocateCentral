@@ -2,10 +2,9 @@ import { useState } from "react";
 import { getUnitStatus } from "../api.js";
 import { formatDate } from "../utils.js";
 
-// Placeholder data shown until a unit has real details in the database.
+// Placeholder shown until a unit has a real return week in the database.
 const PLACEHOLDER = {
-  moveOut: "June 10 – June 12",
-  moveIn: "August 24 – August 28",
+  returnWeek: "August 24 – August 28",
 };
 
 export default function StatusChecker() {
@@ -34,10 +33,9 @@ export default function StatusChecker() {
 
   const data = result.data;
   const hasMoveIn = !!data?.moveInDate;
-  const moveInDisplay = hasMoveIn ? formatDate(data.moveInDate) : PLACEHOLDER.moveIn;
-  const moveOutDisplay = data?.moveOutDate
-    ? formatDate(data.moveOutDate)
-    : PLACEHOLDER.moveOut;
+  const returnWeekDisplay = hasMoveIn
+    ? formatDate(data.moveInDate)
+    : PLACEHOLDER.returnWeek;
 
   return (
     <div>
@@ -72,23 +70,19 @@ export default function StatusChecker() {
 
           {hasMoveIn ? (
             <div className="alert alert-info">
-              Your expected move-in date has been scheduled. See below.
+              Your return week has been scheduled. See below.
             </div>
           ) : (
             <div className="alert alert-info">
-              Detailed repair status is coming soon. In the meantime, here are the
-              current building-wide move dates.
+              Detailed repair status is coming soon. In the meantime, here is the
+              current building-wide return week.
             </div>
           )}
 
           <div className="meta-grid">
             <div className="meta-item">
-              <div className="label">Move-out date</div>
-              <div className="value">{moveOutDisplay}</div>
-            </div>
-            <div className="meta-item">
-              <div className="label">Expected move-in date</div>
-              <div className="value">{moveInDisplay}</div>
+              <div className="label">Return Week</div>
+              <div className="value">{returnWeekDisplay}</div>
             </div>
           </div>
         </div>

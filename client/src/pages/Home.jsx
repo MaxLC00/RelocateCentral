@@ -12,7 +12,7 @@ const sections = [
   {
     icon: "🔑",
     title: "Relocation & Property Team",
-    text: "Staff login to post announcements and update repair and move-out progress.",
+    text: "Staff login to post announcements and update repair progress and return weeks.",
     to: "/login",
     cta: "Team Login",
     accent: "team",
@@ -34,7 +34,7 @@ export default function Home() {
         <h1>Allerton Repair Progress Portal</h1>
         <p>
           A central place for residents, ownership, and relocation teams to communicate and
-          follow building-wide repairs, move-out, and move-in progress.
+          follow building-wide repairs and return weeks.
         </p>
       </section>
 

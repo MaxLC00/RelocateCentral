@@ -153,7 +153,6 @@ function UnitsPanel() {
   const { canEditUnits } = useAuth();
   const [units, setUnits] = useState([]);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState("group");
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({});
   const [saveStatus, setSaveStatus] = useState({ state: "idle", message: "" });
@@ -176,20 +175,13 @@ function UnitsPanel() {
       );
     })
     .slice()
-    .sort((a, b) => {
-      if (sortBy === "group") {
-        if (a.group !== b.group) return a.group - b.group;
-        return parseInt(a.unitNumber) - parseInt(b.unitNumber);
-      }
-      return parseInt(a.unitNumber) - parseInt(b.unitNumber);
-    });
+    .sort((a, b) => parseInt(a.unitNumber) - parseInt(b.unitNumber));
 
   function selectUnit(u) {
     setSelected(u);
     setForm({
       residentName: u.residentName || "",
       status: u.status || "Not Started",
-      moveOutDate: u.moveOutDate ? u.moveOutDate.slice(0, 10) : "",
       moveInDate: u.moveInDate ? u.moveInDate.slice(0, 10) : "",
       storageLocation: u.storageLocation || "",
       temporaryHousingLocation: u.temporaryHousingLocation || "",
@@ -242,20 +234,6 @@ function UnitsPanel() {
     <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "1.5rem", alignItems: "start" }}>
       {/* Unit list */}
       <div>
-        <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.5rem" }}>
-          <button
-            className={`pill ${sortBy === "group" ? "active" : ""}`}
-            onClick={() => setSortBy("group")}
-          >
-            By group
-          </button>
-          <button
-            className={`pill ${sortBy === "unit" ? "active" : ""}`}
-            onClick={() => setSortBy("unit")}
-          >
-            By unit #
-          </button>
-        </div>
         <div className="field" style={{ marginBottom: "0.75rem" }}>
           <input
             type="text"
@@ -331,15 +309,9 @@ function UnitsPanel() {
                 </select>
               </div>
 
-              <div className="form-row">
-                <div className="field">
-                  <label>Move-out date</label>
-                  <input type="date" value={form.moveOutDate} onChange={update("moveOutDate")} />
-                </div>
-                <div className="field">
-                  <label>Expected move-in date</label>
-                  <input type="date" value={form.moveInDate} onChange={update("moveInDate")} />
-                </div>
+              <div className="field">
+                <label>Return Week</label>
+                <input type="date" value={form.moveInDate} onChange={update("moveInDate")} />
               </div>
 
               <div className="field">
