@@ -8,6 +8,7 @@ const userRoutes = require("./routes/users");
 const announcementRoutes = require("./routes/announcements");
 const unitRoutes = require("./routes/units");
 const contactRoutes = require("./routes/contacts");
+const fileRoutes = require("./routes/files");
 
 const path = require("path");
 
@@ -48,6 +49,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/announcements", announcementRoutes);
 app.use("/api/units", unitRoutes);
 app.use("/api/contacts", contactRoutes);
+app.use("/api/files", fileRoutes);
 
 // 404 handler for unknown API routes
 app.use("/api", (req, res) => {

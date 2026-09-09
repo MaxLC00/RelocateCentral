@@ -13,6 +13,10 @@ import {
   listUsers,
   createUser,
   deleteUser,
+  listFiles,
+  uploadFile,
+  deleteFile,
+  downloadFile,
 } from "../api.js";
 import { formatDate, statusClass } from "../utils.js";
 
@@ -570,10 +574,183 @@ function UsersPanel() {
   );
 }
 
+// ─── Files panel ──────────────────────────────────────────────────────────────
+const ACCEPTED_FILE_TYPES =
+  ".jpg,.jpeg,.pdf,.xls,.xlsx,image/jpeg,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function formatBytes(bytes) {
+  if (!bytes && bytes !== 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileIcon(mimeType) {
+  if (!mimeType) return "📄";
+  if (mimeType.startsWith("image/")) return "🖼️";
+  if (mimeType === "application/pdf") return "📕";
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel")) return "📊";
+  return "📄";
+}
+
+function downloadNameFor(f) {
+  const name = (f.title || "").trim();
+  if (!name) return f.filename;
+  const dot = f.filename.lastIndexOf(".");
+  const ext = dot > -1 ? f.filename.slice(dot) : "";
+  return name.toLowerCase().endsWith(ext.toLowerCase()) ? name : name + ext;
+}
+
+function FilesPanel() {
+  const { canEdit } = useAuth();
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState({ state: "idle", message: "" });
+  const [busyId, setBusyId] = useState(null);
+
+  async function load() {
+    setLoading(true);
+    try { setFiles(await listFiles()); }
+    catch { /* silent */ }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function handleUpload(e) {
+    e.preventDefault();
+    if (!selected) return;
+    setStatus({ state: "uploading", message: "" });
+    try {
+      await uploadFile(selected, { title, description });
+      setStatus({ state: "success", message: `"${title.trim() || selected.name}" uploaded.` });
+      setSelected(null);
+      setTitle("");
+      setDescription("");
+      e.target.reset();
+      load();
+    } catch (err) {
+      setStatus({ state: "error", message: err.response?.data?.message || "Upload failed." });
+    }
+  }
+
+  async function handleDownload(f) {
+    setBusyId(f.id);
+    try { await downloadFile(f.id, downloadNameFor(f)); }
+    catch { /* silent */ }
+    finally { setBusyId(null); }
+  }
+
+  async function handleDelete(f) {
+    if (!window.confirm(`Delete "${f.filename}"? This cannot be undone.`)) return;
+    try {
+      await deleteFile(f.id);
+      load();
+    } catch { /* silent */ }
+  }
+
+  return (
+    <div>
+      {canEdit && (
+        <>
+          <h2 className="section-title">Upload File</h2>
+          <p className="section-sub">Accepted types: JPEG, PDF, and Excel (.xls / .xlsx). Max 25 MB.</p>
+
+          <form className="form-card" style={{ marginBottom: "2.5rem" }} onSubmit={handleUpload}>
+            {status.state === "success" && <div className="alert alert-success">{status.message}</div>}
+            {status.state === "error" && <div className="alert alert-error">{status.message}</div>}
+
+            <div className="field">
+              <label htmlFor="file-input">Choose a file *</label>
+              <input
+                id="file-input"
+                type="file"
+                accept={ACCEPTED_FILE_TYPES}
+                onChange={(e) => setSelected(e.target.files[0] || null)}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="file-title">Name</label>
+              <input
+                id="file-title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={selected ? selected.name : "Display name (optional)"}
+              />
+              <span className="hint">Leave blank to use the original file name.</span>
+            </div>
+
+            <div className="field">
+              <label htmlFor="file-description">Description</label>
+              <textarea
+                id="file-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What is this file? (optional)"
+              />
+            </div>
+
+            <button type="submit" className="btn btn-primary" disabled={!selected || status.state === "uploading"}>
+              {status.state === "uploading" ? "Uploading…" : "Upload file"}
+            </button>
+          </form>
+        </>
+      )}
+
+      <h2 className="section-title">Shared Files</h2>
+      <p className="section-sub">Files uploaded by the team. Click download to save a copy.</p>
+
+      {loading && <div className="loading-state">Loading…</div>}
+      {!loading && files.length === 0 && <div className="empty-state">No files have been uploaded yet.</div>}
+      {!loading && files.map((f) => (
+        <div key={f.id} className="card" style={{ marginBottom: "0.75rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0 }}>
+            <span style={{ fontSize: "1.5rem" }}>{fileIcon(f.mimeType)}</span>
+            <div style={{ minWidth: 0 }}>
+              <strong style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {f.title || f.filename}
+              </strong>
+              {f.description && (
+                <span style={{ display: "block", fontSize: "0.85rem", color: "var(--text)", margin: "0.15rem 0" }}>
+                  {f.description}
+                </span>
+              )}
+              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                {f.title ? `${f.filename} · ` : ""}{formatBytes(f.size)}
+                {f.uploadedBy ? ` · ${f.uploadedBy}` : ""} · {formatDate(f.uploadedAt)}
+              </span>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+            <button className="btn btn-outline" onClick={() => handleDownload(f)} disabled={busyId === f.id}>
+              {busyId === f.id ? "…" : "⬇ Download"}
+            </button>
+            {canEdit && (
+              <button
+                className="btn btn-outline"
+                style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                onClick={() => handleDelete(f)}
+              >
+                Delete
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Dashboard shell ──────────────────────────────────────────────────────────
 const ALL_TABS = [
   { key: "announcements", label: "📢 Announcements", roles: ["Admin", "Member", "3rd Party"] },
   { key: "units", label: "🏠 Units", roles: ["Admin", "Member", "3rd Party"] },
+  { key: "files", label: "📁 Files", roles: ["Admin", "Member", "3rd Party"] },
   { key: "messages", label: "✉️ Messages", roles: ["Admin", "Member"] },
   { key: "users", label: "👤 Users", roles: ["Admin"] },
 ];
@@ -620,6 +797,7 @@ export default function TeamDashboard() {
 
       {tab === "announcements" && <AnnouncementsPanel />}
       {tab === "units" && <UnitsPanel />}
+      {tab === "files" && <FilesPanel />}
       {tab === "messages" && <MessagesPanel />}
       {tab === "users" && <UsersPanel />}
     </div>

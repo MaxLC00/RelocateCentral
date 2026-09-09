@@ -56,6 +56,34 @@ export const downloadUnitsCsv = async () => {
   window.URL.revokeObjectURL(url);
 };
 
+export const listFiles = () =>
+  api.get("/files").then((r) => r.data);
+
+export const uploadFile = (file, { title = "", description = "" } = {}) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("title", title);
+  formData.append("description", description);
+  return api
+    .post("/files", formData, { headers: { "Content-Type": "multipart/form-data" } })
+    .then((r) => r.data);
+};
+
+export const deleteFile = (id) =>
+  api.delete(`/files/${id}`).then((r) => r.data);
+
+export const downloadFile = async (id, filename) => {
+  const res = await api.get(`/files/${id}`, { responseType: "blob" });
+  const url = window.URL.createObjectURL(new Blob([res.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename || "download");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
 export const listUsers = () =>
   api.get("/users").then((r) => r.data);
 
