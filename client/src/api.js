@@ -19,6 +19,9 @@ export const getAnnouncements = (category) =>
 export const getUnitStatus = (unitNumber) =>
   api.get(`/units/${encodeURIComponent(unitNumber)}`).then((r) => r.data);
 
+export const getUnitByResident = (name) =>
+  api.get("/units/by-resident", { params: { name } }).then((r) => r.data);
+
 export const submitContact = (payload) =>
   api.post("/contacts", payload).then((r) => r.data);
 

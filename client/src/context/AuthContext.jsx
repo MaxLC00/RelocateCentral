@@ -42,6 +42,8 @@ export function AuthProvider({ children }) {
         isThirdParty: role === "3rd Party",
         canEdit: role === "Admin" || role === "Member",
         canEditUnits: role === "Admin" || role === "Member" || role === "3rd Party",
+        canPostAnnouncements:
+          role === "Admin" || role === "Member" || role === "3rd Party",
       }}
     >
       {children}

@@ -26,7 +26,7 @@ const EMPTY_ANNOUNCEMENT = { title: "", body: "", category: "general", pinned: f
 
 // ─── Announcements panel ──────────────────────────────────────────────────────
 function AnnouncementsPanel() {
-  const { canEdit, isAdmin } = useAuth();
+  const { canPostAnnouncements, isAdmin } = useAuth();
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(EMPTY_ANNOUNCEMENT);
   const [status, setStatus] = useState({ state: "idle", message: "" });
@@ -72,7 +72,7 @@ function AnnouncementsPanel() {
 
   return (
     <div>
-      {canEdit && (
+      {canPostAnnouncements && (
         <>
           <h2 className="section-title">Post Announcement</h2>
           <p className="section-sub">New announcements appear on the resident portal immediately.</p>
@@ -756,7 +756,7 @@ const ALL_TABS = [
 ];
 
 export default function TeamDashboard() {
-  const { username, role, logout } = useAuth();
+  const { username, role, isThirdParty, logout } = useAuth();
   const navigate = useNavigate();
 
   const tabs = ALL_TABS.filter((t) => t.roles.includes(role));
@@ -774,7 +774,7 @@ export default function TeamDashboard() {
           <h1>Team Dashboard</h1>
           <p>
             Signed in as <strong>{username}</strong>
-            {role && (
+            {role && !isThirdParty && (
               <span className="badge" style={{ marginLeft: "0.5rem", ...(ROLE_BADGE[role] || {}) }}>{role}</span>
             )}
           </p>

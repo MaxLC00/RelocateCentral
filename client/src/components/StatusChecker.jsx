@@ -1,51 +1,51 @@
 import { useState } from "react";
-import { getUnitStatus } from "../api.js";
-import { formatDate } from "../utils.js";
+import { getUnitByResident } from "../api.js";
+import { weekRange } from "../utils.js";
 
-// Placeholder shown until a unit has a real return week in the database.
-const PLACEHOLDER = {
-  returnWeek: "August 24 – August 28",
-};
+const MANAGEMENT_MESSAGE =
+  "We are currently working on your unit and do not yet have a confirmed return date, please check back regularly. Thank you, Management.";
 
 export default function StatusChecker() {
-  const [unit, setUnit] = useState("");
-  const [submittedUnit, setSubmittedUnit] = useState("");
+  const [name, setName] = useState("");
+  const [submittedName, setSubmittedName] = useState("");
   const [result, setResult] = useState({ state: "idle", data: null });
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const value = unit.trim().toUpperCase();
+    const value = name.trim().replace(/\s+/g, " ");
     if (!value) return;
-    setSubmittedUnit(value);
+    setSubmittedName(value);
     setResult({ state: "loading", data: null });
     try {
-      const data = await getUnitStatus(value);
+      const data = await getUnitByResident(value);
       setResult({ state: "found", data });
     } catch (err) {
-      // 404 (no record) falls back to the building-wide placeholder view.
       if (err.response?.status === 404) {
         setResult({ state: "notfound", data: null });
       } else {
-        setResult({ state: "error", data: null });
+        setResult({
+          state: "error",
+          data: null,
+          message: err.response?.data?.message || "Something went wrong. Please try again.",
+        });
       }
     }
   }
 
   const data = result.data;
   const hasMoveIn = !!data?.moveInDate;
-  const returnWeekDisplay = hasMoveIn
-    ? formatDate(data.moveInDate)
-    : PLACEHOLDER.returnWeek;
+  const latestNote =
+    Array.isArray(data?.updates) && data.updates.length ? data.updates[0].note : "";
 
   return (
     <div>
       <form className="status-search" onSubmit={handleSubmit}>
         <input
           type="text"
-          placeholder="Enter unit number (e.g. 3C)"
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          aria-label="Unit number"
+          placeholder="Enter your name (e.g. J Doe)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          aria-label="First initial and last name"
         />
         <button type="submit" className="btn btn-primary">
           Check status
@@ -58,33 +58,39 @@ export default function StatusChecker() {
 
       {result.state === "error" && (
         <div className="alert alert-error" style={{ marginTop: "1.5rem" }}>
-          Something went wrong. Please try again.
+          {result.message || "Something went wrong. Please try again."}
         </div>
       )}
 
-      {submittedUnit && (result.state === "found" || result.state === "notfound") && (
+      {/* No match, or matched a unit that has no confirmed return date yet. */}
+      {(result.state === "notfound" || (result.state === "found" && !hasMoveIn)) && (
+        <div className="status-result">
+          <div className="alert alert-info">{MANAGEMENT_MESSAGE}</div>
+        </div>
+      )}
+
+      {/* Matched a unit that has a confirmed return week. */}
+      {result.state === "found" && hasMoveIn && (
         <div className="status-result">
           <div className="status-result-head">
-            <h3>Unit {submittedUnit}</h3>
+            <h3>{data.residentName || submittedName}</h3>
+            {data.unitNumber && (
+              <span style={{ color: "var(--text-muted)" }}>Unit {data.unitNumber}</span>
+            )}
           </div>
-
-          {hasMoveIn ? (
-            <div className="alert alert-info">
-              Your return week has been scheduled. See below.
-            </div>
-          ) : (
-            <div className="alert alert-info">
-              Detailed repair status is coming soon. In the meantime, here is the
-              current building-wide return week.
-            </div>
-          )}
 
           <div className="meta-grid">
             <div className="meta-item">
               <div className="label">Return Week</div>
-              <div className="value">{returnWeekDisplay}</div>
+              <div className="value">{weekRange(data.moveInDate)}</div>
             </div>
           </div>
+
+          {latestNote && (
+            <div className="alert alert-info" style={{ marginTop: "1rem" }}>
+              {latestNote}
+            </div>
+          )}
         </div>
       )}
     </div>

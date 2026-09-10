@@ -26,6 +26,67 @@ async function getUnitStatus(req, res, next) {
   }
 }
 
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// GET /api/units/by-resident?name=J Doe  -> public status check by resident name.
+// Matches on last name (case-insensitive); the first initial is only used to
+// disambiguate when several residents share the same last name.
+async function getUnitByResident(req, res, next) {
+  try {
+    const raw = String(req.query.name || "").trim().replace(/\s+/g, " ");
+    if (!raw) {
+      return res.status(400).json({ message: "A name is required" });
+    }
+
+    // Split into an optional first initial and a last name.
+    const tokens = raw.split(" ");
+    let initial = "";
+    let lastName = raw;
+    if (tokens.length >= 2) {
+      initial = tokens[0].replace(/[^A-Za-z]/g, "").charAt(0);
+      lastName = tokens.slice(1).join(" ");
+    }
+
+    // Match resident names ending with the given last name (as a whole word),
+    // case-insensitive — e.g. "J Doe" or "Mary Doe" both match last name "Doe".
+    const lastNameRegex = new RegExp(`(^|\\s)${escapeRegex(lastName)}$`, "i");
+    let matches = await Unit.find({ residentName: lastNameRegex }).lean();
+
+    if (matches.length === 0) {
+      return res.status(404).json({ message: `No record found for "${raw}"` });
+    }
+
+    if (matches.length > 1 && initial) {
+      const byInitial = matches.filter(
+        (u) =>
+          u.residentName.trim().charAt(0).toLowerCase() === initial.toLowerCase()
+      );
+      if (byInitial.length === 0) {
+        return res.status(404).json({ message: `No record found for "${raw}"` });
+      }
+      matches = byInitial;
+    }
+
+    if (matches.length > 1) {
+      return res.status(409).json({
+        message:
+          'Multiple residents share that last name. Please include your first initial, for example "J Doe".',
+      });
+    }
+
+    const unit = matches[0];
+    if (Array.isArray(unit.updates)) {
+      unit.updates.sort((a, b) => new Date(b.date) - new Date(a.date));
+    }
+
+    res.json(unit);
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/units  -> overview list (used by dashboards later)
 async function listUnits(req, res, next) {
   try {
@@ -150,6 +211,7 @@ async function updateUnit(req, res, next) {
 
 module.exports = {
   getUnitStatus,
+  getUnitByResident,
   listUnits,
   updateUnit,
   exportUnits,

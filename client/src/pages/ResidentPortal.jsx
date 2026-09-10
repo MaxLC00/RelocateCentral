@@ -34,7 +34,7 @@ export default function ResidentPortal() {
       <section style={{ marginBottom: "3rem" }}>
         <h2 className="section-title">🔍 Check Your Unit Status</h2>
         <p className="section-sub">
-          Enter your unit number to see repair progress and recent updates.
+          Enter your first initial and last name (e.g. J Doe) to see your return week.
         </p>
         <StatusChecker />
       </section>
