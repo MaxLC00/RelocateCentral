@@ -9,7 +9,7 @@ const requireAuth = require("../middleware/auth");
 const { requireRole } = require("../middleware/auth");
 
 router.post("/", createContact);
-router.get("/", requireAuth, requireRole("Admin", "Member"), listContacts);
+router.get("/", requireAuth, requireRole("Admin", "Member", "3rd Party"), listContacts);
 router.patch(
   "/:id/status",
   requireAuth,

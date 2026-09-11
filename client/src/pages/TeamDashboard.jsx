@@ -6,6 +6,7 @@ import {
   createAnnouncement,
   deleteAnnouncement,
   listUnits,
+  getUnitStatus,
   updateUnit,
   downloadUnitsCsv,
   listContacts,
@@ -181,9 +182,8 @@ function UnitsPanel() {
     .slice()
     .sort((a, b) => parseInt(a.unitNumber) - parseInt(b.unitNumber));
 
-  function selectUnit(u) {
-    setSelected(u);
-    setForm({
+  function formFromUnit(u) {
+    return {
       residentName: u.residentName || "",
       status: u.status || "Not Started",
       moveInDate: u.moveInDate ? u.moveInDate.slice(0, 10) : "",
@@ -191,8 +191,22 @@ function UnitsPanel() {
       temporaryHousingLocation: u.temporaryHousingLocation || "",
       notes: u.notes || "",
       updateNote: "",
-    });
+    };
+  }
+
+  async function selectUnit(u) {
+    // The list endpoint only returns a few fields, so fetch the full record to
+    // populate every saved field (storage, temp housing, notes, return week, …).
+    setSelected(u);
+    setForm(formFromUnit(u));
     setSaveStatus({ state: "idle", message: "" });
+    try {
+      const full = await getUnitStatus(u.unitNumber);
+      setSelected(full);
+      setForm(formFromUnit(full));
+    } catch {
+      /* keep the partial list data if the full fetch fails */
+    }
   }
 
   function update(field) {
@@ -347,6 +361,22 @@ function UnitsPanel() {
                 {saveStatus.state === "saving" ? "Saving…" : "Save changes"}
               </button>
             )}
+
+            {Array.isArray(selected.updates) && selected.updates.length > 0 && (
+              <div style={{ marginTop: "1.5rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                <label style={{ fontWeight: 600 }}>Update history</label>
+                <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  {selected.updates.map((up, i) => (
+                    <div key={i} style={{ fontSize: "0.88rem" }}>
+                      <div>{up.note}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                        {up.status ? `${up.status} · ` : ""}{formatDate(up.date)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </form>
         )}
       </div>
@@ -365,6 +395,7 @@ const STATUS_STYLES = {
 };
 
 function MessagesPanel() {
+  const { canEdit } = useAuth();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -436,23 +467,25 @@ function MessagesPanel() {
             <p style={{ margin: 0 }}>{m.message}</p>
           </div>
 
-          <div style={{ flexShrink: 0 }}>
-            <select
-              value={m.status}
-              onChange={(e) => handleStatusChange(m._id, e.target.value)}
-              style={{
-                padding: "0.4rem 0.6rem",
-                borderRadius: "8px",
-                border: "1px solid var(--border)",
-                fontSize: "0.85rem",
-                cursor: "pointer",
-              }}
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-              ))}
-            </select>
-          </div>
+          {canEdit && (
+            <div style={{ flexShrink: 0 }}>
+              <select
+                value={m.status}
+                onChange={(e) => handleStatusChange(m._id, e.target.value)}
+                style={{
+                  padding: "0.4rem 0.6rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -751,7 +784,7 @@ const ALL_TABS = [
   { key: "announcements", label: "📢 Announcements", roles: ["Admin", "Member", "3rd Party"] },
   { key: "units", label: "🏠 Units", roles: ["Admin", "Member", "3rd Party"] },
   { key: "files", label: "📁 Files", roles: ["Admin", "Member", "3rd Party"] },
-  { key: "messages", label: "✉️ Messages", roles: ["Admin", "Member"] },
+  { key: "messages", label: "✉️ Messages", roles: ["Admin", "Member", "3rd Party"] },
   { key: "users", label: "👤 Users", roles: ["Admin"] },
 ];
 
