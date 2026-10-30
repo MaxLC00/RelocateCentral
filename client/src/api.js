@@ -87,6 +87,48 @@ export const downloadFile = async (id, filename) => {
   window.URL.revokeObjectURL(url);
 };
 
+export const listTasks = () =>
+  api.get("/tasks").then((r) => r.data);
+
+export const createTask = (payload) =>
+  api.post("/tasks", payload).then((r) => r.data);
+
+export const updateTask = (id, payload) =>
+  api.put(`/tasks/${id}`, payload).then((r) => r.data);
+
+export const deleteTask = (id) =>
+  api.delete(`/tasks/${id}`).then((r) => r.data);
+
+export const listTaskAttachments = (taskId) =>
+  api.get(`/tasks/${taskId}/attachments`).then((r) => r.data);
+
+export const uploadTaskAttachment = (taskId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return api
+    .post(`/tasks/${taskId}/attachments`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    })
+    .then((r) => r.data);
+};
+
+export const deleteTaskAttachment = (taskId, attId) =>
+  api.delete(`/tasks/${taskId}/attachments/${attId}`).then((r) => r.data);
+
+export const downloadTaskAttachment = async (taskId, attId, filename) => {
+  const res = await api.get(`/tasks/${taskId}/attachments/${attId}`, {
+    responseType: "blob",
+  });
+  const url = window.URL.createObjectURL(new Blob([res.data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename || "download");
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
 export const listUsers = () =>
   api.get("/users").then((r) => r.data);
 

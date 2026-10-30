@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import {
@@ -18,6 +18,14 @@ import {
   uploadFile,
   deleteFile,
   downloadFile,
+  listTasks,
+  createTask,
+  updateTask,
+  deleteTask,
+  listTaskAttachments,
+  uploadTaskAttachment,
+  deleteTaskAttachment,
+  downloadTaskAttachment,
 } from "../api.js";
 import { formatDate, statusClass } from "../utils.js";
 
@@ -779,10 +787,518 @@ function FilesPanel() {
   );
 }
 
+// ─── Tasks (Kanban) panel ───────────────────────────────────────────────────
+const KANBAN_COLUMNS = ["To Do", "In Progress", "Done"];
+const COLUMN_ACCENT = {
+  "To Do": "#64748b",
+  "In Progress": "#b45309",
+  Done: "#166534",
+};
+const EMPTY_TASK = { title: "", description: "", assignee: "", status: "To Do", dueDate: "" };
+
+// A task counts as "new" for 24 hours after it's created.
+const NEW_TASK_WINDOW_MS = 24 * 60 * 60 * 1000;
+// A due date is "approaching" when it's within this many days.
+const DUE_SOON_DAYS = 3;
+const ACCEPTED_ATTACHMENT_TYPES =
+  "image/*,.pdf,.xls,.xlsx,.doc,.docx,.csv,.txt";
+
+function isNewTask(task) {
+  if (!task?.createdAt) return false;
+  return Date.now() - new Date(task.createdAt).getTime() < NEW_TASK_WINDOW_MS;
+}
+
+// Returns { level: "overdue" | "soon" | "upcoming", days, label } or null.
+function dueInfo(task) {
+  if (!task?.dueDate) return null;
+  const due = new Date(task.dueDate);
+  if (Number.isNaN(due.getTime())) return null;
+
+  const now = new Date();
+  const todayUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueUTC = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+  const days = Math.round((dueUTC - todayUTC) / 86400000);
+
+  const dateLabel = due.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+
+  let level = "upcoming";
+  if (days < 0) level = "overdue";
+  else if (days <= DUE_SOON_DAYS) level = "soon";
+
+  return { level, days, dateLabel };
+}
+
+const DUE_STYLES = {
+  overdue: { background: "#fee2e2", color: "#b91c1c" },
+  soon: { background: "#fef3c7", color: "#b45309" },
+  upcoming: { background: "#eef2ff", color: "#3730a3" },
+};
+
+function KanbanPanel() {
+  const { canEdit } = useAuth();
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(EMPTY_TASK);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [dragId, setDragId] = useState(null);
+  const [dragOverCol, setDragOverCol] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null); // { id, before }
+  const [attachments, setAttachments] = useState([]);
+  const [attachLoading, setAttachLoading] = useState(false);
+  const [attachBusy, setAttachBusy] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try { setTasks(await listTasks()); }
+    catch { /* silent */ }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function openCreate(status) {
+    setEditing(null);
+    setForm({ ...EMPTY_TASK, status });
+    setAttachments([]);
+    setError("");
+    setModalOpen(true);
+  }
+
+  async function openEdit(task) {
+    setEditing(task);
+    setForm({
+      title: task.title || "",
+      description: task.description || "",
+      assignee: task.assignee || "",
+      status: task.status || "To Do",
+      dueDate: task.dueDate ? task.dueDate.slice(0, 10) : "",
+    });
+    setAttachments([]);
+    setError("");
+    setModalOpen(true);
+    setAttachLoading(true);
+    try {
+      setAttachments(await listTaskAttachments(task._id));
+    } catch {
+      /* silent */
+    } finally {
+      setAttachLoading(false);
+    }
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setEditing(null);
+    setForm(EMPTY_TASK);
+    setAttachments([]);
+  }
+
+  function bumpAttachmentCount(taskId, delta) {
+    setTasks((cur) =>
+      cur.map((t) =>
+        t._id === taskId
+          ? { ...t, attachmentCount: Math.max(0, (t.attachmentCount || 0) + delta) }
+          : t
+      )
+    );
+  }
+
+  async function handleAttachmentUpload(e) {
+    const file = e.target.files[0];
+    e.target.value = ""; // allow re-selecting the same file
+    if (!file || !editing) return;
+    setAttachBusy(true);
+    setError("");
+    try {
+      const att = await uploadTaskAttachment(editing._id, file);
+      setAttachments((prev) => [...prev, att]);
+      bumpAttachmentCount(editing._id, 1);
+    } catch (err) {
+      setError(err.response?.data?.message || "Attachment upload failed.");
+    } finally {
+      setAttachBusy(false);
+    }
+  }
+
+  async function handleAttachmentDelete(att) {
+    if (!editing) return;
+    if (!window.confirm(`Remove "${att.filename}"?`)) return;
+    try {
+      await deleteTaskAttachment(editing._id, att.id);
+      setAttachments((prev) => prev.filter((a) => a.id !== att.id));
+      bumpAttachmentCount(editing._id, -1);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to remove attachment.");
+    }
+  }
+
+  async function handleAttachmentDownload(att) {
+    if (!editing) return;
+    try {
+      await downloadTaskAttachment(editing._id, att.id, att.filename);
+    } catch {
+      /* silent */
+    }
+  }
+
+  function updateField(field) {
+    return (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    setSaving(true);
+    setError("");
+    try {
+      if (editing) {
+        const updated = await updateTask(editing._id, form);
+        setTasks((prev) => prev.map((t) => (t._id === updated._id ? updated : t)));
+      } else {
+        const created = await createTask(form);
+        setTasks((prev) => [...prev, created]);
+      }
+      closeModal();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to save task.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!editing) return;
+    if (!window.confirm(`Delete task "${editing.title}"?`)) return;
+    try {
+      await deleteTask(editing._id);
+      setTasks((prev) => prev.filter((t) => t._id !== editing._id));
+      closeModal();
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to delete task.");
+    }
+  }
+
+  // Move the dragged task into `column` at the position relative to `targetId`.
+  // Uses fractional ordering so only the moved task needs to be saved.
+  async function performMove(column, targetId, before) {
+    const id = dragId;
+    setDragId(null);
+    setDropTarget(null);
+    setDragOverCol(null);
+    if (!id || id === targetId) return;
+
+    const dragged = tasks.find((t) => t._id === id);
+    if (!dragged) return;
+
+    const list = tasks
+      .filter((t) => t.status === column && t._id !== id)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    let index;
+    if (!targetId) {
+      index = list.length;
+    } else {
+      const ti = list.findIndex((t) => t._id === targetId);
+      index = ti < 0 ? list.length : before ? ti : ti + 1;
+    }
+
+    const prevOrder = index > 0 ? list[index - 1].order || 0 : null;
+    const nextOrder = index < list.length ? list[index].order || 0 : null;
+
+    let newOrder;
+    if (prevOrder == null && nextOrder == null) newOrder = Date.now();
+    else if (prevOrder == null) newOrder = nextOrder - 1000;
+    else if (nextOrder == null) newOrder = prevOrder + 1000;
+    else newOrder = (prevOrder + nextOrder) / 2;
+
+    if (dragged.status === column && dragged.order === newOrder) return;
+
+    setTasks((cur) =>
+      cur.map((t) => (t._id === id ? { ...t, status: column, order: newOrder } : t))
+    );
+    try {
+      await updateTask(id, { status: column, order: newOrder });
+    } catch {
+      load(); // revert to server state on failure
+    }
+  }
+
+  const byColumn = (col) =>
+    tasks
+      .filter((t) => t.status === col)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", marginBottom: "1.25rem" }}>
+        <div>
+          <h2 className="section-title" style={{ marginBottom: "0.25rem" }}>Task Board</h2>
+          <p className="section-sub" style={{ margin: 0 }}>Drag cards to reorder within a column or move them between columns.</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => openCreate("To Do")}>+ New task</button>
+      </div>
+
+      {loading && <div className="loading-state">Loading…</div>}
+
+      {!loading && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem", alignItems: "start" }}>
+          {KANBAN_COLUMNS.map((col) => {
+            const items = byColumn(col);
+            return (
+              <div
+                key={col}
+                onDragOver={(e) => { e.preventDefault(); setDragOverCol(col); setDropTarget(null); }}
+                onDragLeave={() => setDragOverCol((c) => (c === col ? null : c))}
+                onDrop={() => performMove(col, null, false)}
+                style={{
+                  background: dragOverCol === col ? "var(--primary-soft)" : "#f8fafc",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius)",
+                  padding: "0.75rem",
+                  minHeight: "120px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600 }}>
+                    <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: COLUMN_ACCENT[col] }} />
+                    {col}
+                    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>({items.length})</span>
+                  </span>
+                  <button
+                    className="pill"
+                    onClick={() => openCreate(col)}
+                    title={`Add task to ${col}`}
+                    style={{ padding: "0.1rem 0.5rem" }}
+                  >
+                    +
+                  </button>
+                </div>
+
+                {items.length === 0 && (
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", padding: "0.5rem 0.25rem" }}>
+                    No tasks.
+                  </div>
+                )}
+
+                {items.map((t) => {
+                  const showLine = dragId && dragId !== t._id && dropTarget?.id === t._id;
+                  const dropLine = (
+                    <div style={{ height: "3px", background: "var(--primary)", borderRadius: "2px", margin: "2px 0" }} />
+                  );
+                  return (
+                    <Fragment key={t._id}>
+                      {showLine && dropTarget.before && dropLine}
+                      <div
+                        draggable
+                        onDragStart={(e) => { setDragId(t._id); e.dataTransfer.effectAllowed = "move"; }}
+                        onDragEnd={() => { setDragId(null); setDragOverCol(null); setDropTarget(null); }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!dragId || dragId === t._id) return;
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const before = e.clientY < rect.top + rect.height / 2;
+                          setDragOverCol(col);
+                          setDropTarget({ id: t._id, before });
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const before = e.clientY < rect.top + rect.height / 2;
+                          performMove(col, t._id, before);
+                        }}
+                        onClick={() => openEdit(t)}
+                        style={{
+                          background: "#fff",
+                          border: "1px solid var(--border)",
+                          borderLeft: `3px solid ${COLUMN_ACCENT[col]}`,
+                          borderRadius: "8px",
+                          padding: "0.6rem 0.7rem",
+                          marginBottom: "0.5rem",
+                          cursor: "pointer",
+                          opacity: dragId === t._id ? 0.5 : 1,
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.4rem" }}>
+                          <div style={{ fontWeight: 600, fontSize: "0.9rem", flex: 1 }}>{t.title}</div>
+                          {isNewTask(t) && (
+                            <span
+                              className="badge"
+                              style={{ background: "#dcfce7", color: "#166534", fontSize: "0.65rem", flexShrink: 0 }}
+                            >
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        {t.description && (
+                          <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.25rem", whiteSpace: "pre-wrap" }}>
+                            {t.description}
+                          </div>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
+                          {t.assignee && (
+                            <span className="badge badge-general" style={{ fontSize: "0.72rem" }}>👤 {t.assignee}</span>
+                          )}
+                          {(() => {
+                            const due = dueInfo(t);
+                            if (!due) return null;
+                            // Completed tasks don't raise overdue/approaching warnings.
+                            const level = col === "Done" ? "upcoming" : due.level;
+                            const prefix =
+                              level === "overdue" ? "⚠ Overdue " : level === "soon" ? "⏳ Due " : "📅 Due ";
+                            return (
+                              <span className="badge" style={{ fontSize: "0.72rem", ...DUE_STYLES[level] }}>
+                                {prefix}{due.dateLabel}
+                              </span>
+                            );
+                          })()}
+                          {t.attachmentCount > 0 && (
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                              📎 {t.attachmentCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {showLine && !dropTarget.before && dropLine}
+                    </Fragment>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {modalOpen && (
+        <div
+          onClick={closeModal}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "1rem" }}
+        >
+          <form
+            className="form-card"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={handleSave}
+            style={{ width: "min(520px, 95vw)", maxHeight: "90vh", overflowY: "auto", margin: 0 }}
+          >
+            <h3 style={{ marginTop: 0 }}>{editing ? "Edit Task" : "New Task"}</h3>
+            {error && <div className="alert alert-error">{error}</div>}
+
+            <div className="field">
+              <label htmlFor="task-title">Title *</label>
+              <input id="task-title" type="text" required value={form.title} onChange={updateField("title")} autoFocus />
+            </div>
+
+            <div className="field">
+              <label htmlFor="task-desc">Description</label>
+              <textarea id="task-desc" value={form.description} onChange={updateField("description")} placeholder="Details (optional)" />
+            </div>
+
+            <div className="form-row">
+              <div className="field">
+                <label htmlFor="task-assignee">Assignee</label>
+                <input id="task-assignee" type="text" value={form.assignee} onChange={updateField("assignee")} placeholder="Who's responsible? (optional)" />
+              </div>
+              <div className="field">
+                <label htmlFor="task-status">Column</label>
+                <select id="task-status" value={form.status} onChange={updateField("status")}>
+                  {KANBAN_COLUMNS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="field">
+              <label htmlFor="task-due">Due date</label>
+              <input id="task-due" type="date" value={form.dueDate} onChange={updateField("dueDate")} />
+              <span className="hint">Leave blank for no due date.</span>
+            </div>
+
+            {editing && (
+              <div className="field" style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                <label>Attachments</label>
+                <p className="hint" style={{ marginTop: 0 }}>Pictures and documents (images, PDF, Excel, Word, CSV, text). Max 25 MB.</p>
+
+                {attachLoading && <div className="loading-state">Loading…</div>}
+                {!attachLoading && attachments.length === 0 && (
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                    No attachments yet.
+                  </div>
+                )}
+                {attachments.map((a) => (
+                  <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", padding: "0.4rem 0", borderBottom: "1px solid var(--border)" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                      <span>{fileIcon(a.mimeType)}</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.filename}</span>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", flexShrink: 0 }}>{formatBytes(a.size)}</span>
+                    </span>
+                    <span style={{ display: "flex", gap: "0.4rem", flexShrink: 0 }}>
+                      <button type="button" className="pill" onClick={() => handleAttachmentDownload(a)}>⬇</button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          className="pill"
+                          style={{ color: "var(--danger)" }}
+                          onClick={() => handleAttachmentDelete(a)}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </span>
+                  </div>
+                ))}
+
+                <div style={{ marginTop: "0.6rem" }}>
+                  <input
+                    type="file"
+                    accept={ACCEPTED_ATTACHMENT_TYPES}
+                    onChange={handleAttachmentUpload}
+                    disabled={attachBusy}
+                  />
+                  {attachBusy && <span className="hint"> Uploading…</span>}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <div>
+                {editing && canEdit && (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    style={{ color: "var(--danger)", borderColor: "var(--danger)" }}
+                    onClick={handleDelete}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button type="button" className="btn btn-outline" onClick={closeModal}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={saving || !form.title.trim()}>
+                  {saving ? "Saving…" : editing ? "Save" : "Add task"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Dashboard shell ──────────────────────────────────────────────────────────
 const ALL_TABS = [
   { key: "announcements", label: "📢 Announcements", roles: ["Admin", "Member", "3rd Party"] },
   { key: "units", label: "🏠 Units", roles: ["Admin", "Member", "3rd Party"] },
+  { key: "tasks", label: "🗂️ Tasks", roles: ["Admin", "Member", "3rd Party"] },
   { key: "files", label: "📁 Files", roles: ["Admin", "Member", "3rd Party"] },
   { key: "messages", label: "✉️ Messages", roles: ["Admin", "Member", "3rd Party"] },
   { key: "users", label: "👤 Users", roles: ["Admin"] },
@@ -830,6 +1346,7 @@ export default function TeamDashboard() {
 
       {tab === "announcements" && <AnnouncementsPanel />}
       {tab === "units" && <UnitsPanel />}
+      {tab === "tasks" && <KanbanPanel />}
       {tab === "files" && <FilesPanel />}
       {tab === "messages" && <MessagesPanel />}
       {tab === "users" && <UsersPanel />}
